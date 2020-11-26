@@ -1,6 +1,6 @@
 
 
-import Parser (parseInstruction, Switch (..), Instruction, getSwitch, isAffected)
+import Parser (parseInstruction, Switch (..), Instruction, getSwitch, isAffected, testInstructions)
 
 
 inputFile :: String
@@ -13,15 +13,15 @@ instructionText = fmap lines (readFile inputFile)
 
 validateInstructions :: [Maybe Instruction] -> Maybe [Instruction]
 validateInstructions [] = Just []
-validateInstructions (m:ms) = 
-    case (m, validateInstructions ms) of 
+validateInstructions (m:ms) =
+    case (m, validateInstructions ms) of
         (Nothing, _) -> Nothing
         (_, Nothing) -> Nothing
         (Just x, Just xs) -> Just (x:xs)
-        
-        
+
+
 instructions :: IO (Maybe [Instruction])
-instructions = 
+instructions =
     do instructionStrings <- instructionText
        return (validateInstructions (map parseInstruction instructionStrings))
 
@@ -29,13 +29,15 @@ instructions =
 getAnswer :: IO Int
 getAnswer =
     do baseInstructions <- instructions
-       case baseInstructions of 
+       case baseInstructions of
             Just ins -> return (answer (reverse ins))
             Nothing -> return (-1)
 
 
 data State = On | Off | Toggled | Untoggled
+    deriving Show
 data ResultState = Certain State | Current State
+    deriving Show
 
 
 stateMap :: (State -> State) -> ResultState -> ResultState
@@ -47,22 +49,22 @@ stateMap f resultState =
 
 applySwitch :: Switch -> ResultState -> ResultState
 applySwitch switch (Certain state) = Certain state
-applySwitch switch (Current state) =     
-    case (switch, state) of 
+applySwitch switch (Current state) =
+    case (switch, state) of
         (Toggle, Toggled) -> Current Untoggled
         (SwitchOn, Toggled) -> Certain Off
         (SwitchOff, Toggled) ->  Certain On
-        
+
         (Toggle, Untoggled) -> Current Toggled
         (SwitchOn, Untoggled) -> Certain On
         (SwitchOff, Untoggled) -> Certain Off
-        
+
         (_, _) -> Current state
-        
+
 
 updateState :: (Int, Int) -> Instruction -> ResultState -> ResultState
 updateState _        _           (Certain state) = Certain state
-updateState location instruction resultState     = 
+updateState location instruction resultState     =
     if isAffected instruction location then
         applySwitch switch resultState
     else
@@ -84,7 +86,9 @@ stateValue _            = 0
 
 
 answer :: [Instruction] -> Int
-answer reversedInstructions = 
+answer reversedInstructions =
         sum (map stateValue [determineState (x, y) |  x <- [0..999], y <- [0..999]])
     where
         determineState (x, y) = runUpdate (x, y) (Current Untoggled) reversedInstructions
+
+
