@@ -10,6 +10,7 @@
 
 using std::string;
 using std::cout;
+using std::deque;
 using std::endl;
 using std::istringstream;
 using std::make_pair;
@@ -25,11 +26,12 @@ using DistanceMap = unordered_map<string, int>;
 
 void addEntry(string, Tree&);
 int parseWeightToken(string);
-int findBalancingWeight(Tree);
-int requiredWeight(Tree&, unordered_set<string>);
-unordered_set<string> getLeaves(Tree&);
-void collapseTree(Tree&);
-ParentDict buildParentMap(Tree&, distanceMap&);
+pair<int, string> findBalancingWeight(Tree);
+pair<int, string> requiredWeight(Tree&, unordered_set<string>);
+unordered_set<string> getFurthestLeaves(Tree&, DistanceMap&);
+void collapseTree(Tree&, DistanceMap&);
+DistanceMap buildDistanceMap(Tree&, string);
+ParentDict buildParentMap(Tree&);
 string findRoot(Tree);
 void printSet(unordered_set<string>);
 void printParentDict(ParentDict&);
@@ -48,9 +50,13 @@ int main() {
     }
 
     inputFile.close();
+
+    pair<int, string> balancingPair = findBalancingWeight(tree);
+
+    int balancingWeight = tree[balancingPair.second].first + balancingPair.first;
     
     cout << "Part 1 - root element is " << findRoot(tree) << endl;
-    cout << "Part 2 - the missing weight from the balancing element is " << findBalancingWeight(tree) << endl;
+    cout << "Part 2 - the missing weight from the balancing element is " << balancingWeight << endl;
 
     return 0;
 }
@@ -111,10 +117,9 @@ string findRoot(Tree tree)
 
 // Remember - Tree ~ unordered_map<string, pair<int, unordered_set<string>>>
 // Part 2 - works out the balancing weight required.
-int findBalancingWeight(Tree tree) 
+pair<int, string> findBalancingWeight(Tree tree) 
 {   
     string root = findRoot(tree);
-    DistanceMap distanceMap = buildDistanceMap(tree, root);      
     ParentDict parentMap = buildParentMap(tree);
 
     // Iterate through the outer-most edge of the map. For each level
@@ -123,8 +128,9 @@ int findBalancingWeight(Tree tree)
     // If this is the case then determine the balancing amount and return it.
     // If this is not the case, then keep iterating.
     while (tree.size() > 0) {       
+        DistanceMap distanceMap = buildDistanceMap(tree, root);
         cout << "Iteration tree size: " << tree.size() << endl; 
-        unordered_set<string> currentLeaves = getLeaves(tree);        
+        unordered_set<string> currentLeaves = getFurthestLeaves(tree, distanceMap);
         
         while (currentLeaves.size() > 0) 
         {
@@ -132,18 +138,18 @@ int findBalancingWeight(Tree tree)
             string parent = parentMap[child];            
             unordered_set<string> siblings = tree[parent].second;
 
-            int oddWeight = requiredWeight(tree, siblings);
-            if (oddWeight)
+            pair<int, string> oddWeight = requiredWeight(tree, siblings);
+            if (oddWeight.first)
                 return oddWeight;
             
             for (string sibling : siblings)
                 currentLeaves.erase(sibling);
         }
 
-        collapseTree(tree);
+        collapseTree(tree, distanceMap);
     }
 
-    return -1;
+    return make_pair(-1, "");
 }
 
 
@@ -169,7 +175,6 @@ DistanceMap buildDistanceMap(Tree &tree, string root)
 }
 
 
-
 ParentDict buildParentMap(Tree &tree)
 {
     ParentDict dict;
@@ -186,58 +191,71 @@ ParentDict buildParentMap(Tree &tree)
 }
 
 
-unordered_set<string> getLeaves(Tree &tree) 
+unordered_set<string> getFurthestLeaves(Tree &tree, DistanceMap &distanceMap)
 {    
     unordered_set<string> leaves;
     
+    int furthestDistance = 0;
+
+    for (auto kvp : distanceMap)
+        if (kvp.second > furthestDistance)
+            furthestDistance = kvp.second;
+
+
     for (auto kvp : tree) 
-        if (kvp.second.second.size() == 0)
+        if (kvp.second.second.size() == 0 && distanceMap[kvp.first] == furthestDistance)
             leaves.insert(kvp.first);
         
     return leaves;
 }
 
 
-int requiredWeight(Tree &tree, unordered_set<string> siblings) 
+pair<int, string> requiredWeight(Tree &tree, unordered_set<string> siblings) 
 {   
     // Assume only _one_ child is incorrect => siblings 
     // have to have size > 2.
     if (siblings.size() <= 2)
-        return 0;
+        return make_pair(0, "");
     
     int siblingTotalWeight = 0;
 
     using Weight = int;
     using Count = int;
-    unordered_map<Weight, Count> weightCounts;
+    unordered_map<Weight, pair<Count, vector<string>>> weightCounts;
     
     for (string sibling : siblings) 
     {
         int thisWeight = tree[sibling].first;
         if (weightCounts.find(thisWeight) == weightCounts.end()) 
         { // The weight has not been added.
-            weightCounts.insert(make_pair(thisWeight, 1));
+            vector<string> initialVector;
+            initialVector.push_back(sibling);
+            weightCounts.insert(make_pair(thisWeight, make_pair(1, initialVector)));
         }
         else 
         { // The weight has been added.
-            weightCounts[thisWeight]++;
+            weightCounts[thisWeight].first++;
+            weightCounts[thisWeight].second.push_back(sibling);
         }
         siblingTotalWeight += thisWeight;
     }
     
     for (auto kvp : weightCounts)
     {            
-        if (kvp.second == 1)
-            return (siblingTotalWeight - kvp.first) / (siblings.size() - 1);
+        if (kvp.second.first == 1)
+            return make_pair((siblingTotalWeight - kvp.first) / (siblings.size() - 1) - kvp.first, kvp.second.second.front());
     }
     
-    return 0;
+    return make_pair(0, "");
 }
 
 
-void collapseTree(Tree &tree) 
+void collapseTree(Tree &tree, DistanceMap &distanceMap) 
 {
-    unordered_set<string> startingLeaves = getLeaves(tree);
+    unordered_set<string> startingLeaves = getFurthestLeaves(tree, distanceMap);
+    for (string leaf : startingLeaves)
+        cout << leaf << " ";
+    cout << endl;
     ParentDict parentMap = buildParentMap(tree);
 
     while (startingLeaves.size() > 0) 
