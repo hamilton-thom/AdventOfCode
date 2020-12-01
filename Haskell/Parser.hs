@@ -108,7 +108,11 @@ listToInt = foldl (\n m -> 10 * n + m) 0
 
 
 int :: Parser Int
-int = fmap listToInt (some digit)
+int = 
+    do char '-'
+       digits <- some digit
+       return (-1 * listToInt digits)
+    <|> fmap listToInt (some digit)
 
 
 parseType :: String -> a -> Parser a

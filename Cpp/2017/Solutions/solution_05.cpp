@@ -1,4 +1,4 @@
-
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -7,6 +7,8 @@
 int countStepsToExit(std::vector<int>);
 
 int main() {
+    
+    auto start = std::chrono::high_resolution_clock::now();
     
     std::ifstream inputFile;
     inputFile.open("Inputs/input_05.txt");
@@ -21,9 +23,19 @@ int main() {
     
     inputFile.close();
     
+    auto fileClosed = std::chrono::high_resolution_clock::now();
+    
     int stepCount1 = countStepsToExit(inputVector);
     
+    auto end = std::chrono::high_resolution_clock::now();
+    auto durationFile = std::chrono::duration_cast<std::chrono::microseconds>(fileClosed - start);
+    auto durationCalculation = std::chrono::duration_cast<std::chrono::microseconds>(end - fileClosed);
+    
     std::cout << "Part 1 - count to exit = " << stepCount1 << std::endl;
+    std::cout << "Opening file: " << durationFile.count() << " microseconds" << std::endl;
+    std::cout << "Running calculation: " << durationCalculation.count() << " microseconds" << std::endl;
+    
+    
     return 0;
 }
 
