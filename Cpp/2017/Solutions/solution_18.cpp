@@ -25,10 +25,6 @@ int main()
 
     while (true)
     {
-        instructionSet.getRegisterState().print();
-        cout << endl;
-        printInstruction(instructionSet.getCurrentInstruction());
-        cout << endl;
         optional<long long> instructionVal = instructionSet.runInstruction();
         if (instructionVal)
         {
@@ -36,6 +32,25 @@ int main()
             break;
         }
     }
+
+    // Part 2. Build two programs, then iterate through them until they're both
+    // waiting.
+
+    Program p0(instructions, 0);
+    Program p1(instructions, 1);
+    p0.connectProgram(p1);
+    p1.connectProgram(p0);
+
+    do 
+    {
+        //p0.print("P0");
+        //p1.print("P1");
+        p0.runInstruction();
+        p1.runInstruction();
+    } while (!(p0.isWaiting() && p1.isWaiting()));
+
+    cout << "Part 2 - send count for program 1 = " << p1.getSendCount() << endl;
+
 }
 
 
