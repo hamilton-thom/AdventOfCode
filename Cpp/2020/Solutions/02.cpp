@@ -47,15 +47,8 @@ int main()
     {
         if (isValid(tup))
             validCount++;
-       if (isValid2(tup))
-       {
+        if (isValid2(tup))
             validCount2++;
-       } 
-       else 
-       {
-            printTuple(tup);
-       }
-
     }
 
     cout << "Part 1: valid password count = " << validCount << endl;
