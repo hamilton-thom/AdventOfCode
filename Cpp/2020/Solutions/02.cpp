@@ -81,7 +81,7 @@ bool isValid2(tuple<int, int, char, string> tup)
     char c1 = password[pos1-1];
     char c2 = password[pos2-1];
 
-    return ((c1 == c) && (c2 != c)) || ((c1 != c) && (c2 == c));
+    return (c1 == c) != (c2 == c);
     
 }
 
