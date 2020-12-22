@@ -49,19 +49,76 @@ int main()
     for (auto p : fullOptionSet)
         testRules.erase(p.first);
 
-    for (auto p : fullOptionSet)
+    while (testRules.size() > 0)
     {
-        cout << p.first;
-        for (string s : p.second)
-            cout << " " << s;
-        cout << endl;
+
+        for (auto p : testRules)
+        {
+            if (isDeterminable(fullOptionSet, p.second))
+            {
+                set<string> ruleSet = buildRuleSet(fullOptionSet, p.second);
+                fullOptionSet.insert(make_pair(p.first, ruleSet));
+            }
+        }
     }
-    cout << fullOptionSet.size() << endl;
-    cout << testRules.size() << endl;
 
 
 
 
+  
+
+
+
+}
+
+
+set<string> buildRuleSet(map<int, set<string>> &fullOptionSet, RuleList rd)
+
+
+
+set<string> buildRuleSet(map<int, set<string>> &fullOptionSet, RuleDefinition rd)
+{
+    if (RecursiveRule *rr = get_if<RecursiveRule> &rd)
+    {
+
+        
+        for (int id : rr->first)
+        {
+            if (fullOptionSet.count(id) == 0)
+                return false;
+        }
+
+        for (int id : rr->second)
+        {
+            if (fullOptionSet.count(id) == 0)
+                return false;
+        }
+    }
+
+    cout << "Shouldn't be here...";
+
+    return set<string> {};
+}
+
+
+bool isDeterminable(map<int, set<string>> &fullOptionSet, RuleDefinition rd)
+{
+    if (RecursiveRule *rr = get_if<RecursiveRule> &rd)
+    {
+        for (int id : rr->first)
+        {
+            if (fullOptionSet.count(id) == 0)
+                return false;
+        }
+
+        for (int id : rr->second)
+        {
+            if (fullOptionSet.count(id) == 0)
+                return false;
+        }
+    }
+
+    return true;
 }
 
 

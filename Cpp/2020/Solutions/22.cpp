@@ -9,8 +9,11 @@ deque<int> part1Result(deque<int> player1, deque<int> player2);
 int score(deque<int> d);
 void print(deque<int> &player1, deque<int> &player2);
 
+long iterationCount = 0;
+
 int main ()
 {
+    auto t0 = getTime();
     ifstream inputFile("inputs/22.txt");
 
     string s;
@@ -36,19 +39,10 @@ int main ()
     deque<int> p2d;
 
     for (int i : player1)
-    {
         p1d.push_back(i);
-        cout << i << " ";
-    }
-
-    cout << endl;
 
     for (int i : player2)
-    {
         p2d.push_back(i);
-        cout << i << " ";
-    }
-    cout << endl;
 
     deque<int> part1 = part1Result(p1d, p2d);
 
@@ -64,6 +58,9 @@ int main ()
     {
        cout << score(part2.first) << endl;
     }   
+
+    cout << "Total number of iterations: " << iterationCount;
+    printTimeElapsed(t0, getTime());
 
 }
 
@@ -113,7 +110,7 @@ pair<deque<int>, deque<int>> playGame(deque<int> player1, deque<int> player2)
     unordered_set<string> existingStates;
 
     while (player1.size() > 0 && player2.size() > 0)
-    {
+    {        
         pair<deque<int>, deque<int>> roundResult = playRound(player1, player2, existingStates);
         player1 = roundResult.first;
         player2 = roundResult.second;
@@ -138,6 +135,7 @@ void print(deque<int> &player1, deque<int> &player2)
 // Determine the winner from the sizes of the deques.
 pair<deque<int>, deque<int>> playRound(deque<int> player1, deque<int> player2, unordered_set<string> &existingStates)
 {
+    iterationCount++;
 
     if (existingStates.count(buildState(player1, player2)) > 0)
     {

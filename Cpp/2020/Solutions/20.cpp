@@ -1,9 +1,11 @@
 #include "aoc.h"
+#include <functional>
+
+using std::make_pair;
 
 using Grid = vector<string>;
-using std::make_pair;
 using Coordinate = pair<int, int>;
-using SidePair = pair<int, int>;
+using SideHash = int;
 
 struct pair_hash
 {
@@ -14,19 +16,26 @@ struct pair_hash
     }
 };
 
+struct Grid_hash
+{
+    std::size_t operator() (const Grid &g) const
+    {
+        std::size_t hash = 0;
+        for (string s : g)
+            hash ^= std::hash<std::string>{}(s);
+
+        return hash;
+    }
+};
+
+
 pair<int, Grid> getGrid(ifstream &inputFile);
-vector<SidePair> getOptions(Grid grid);
-SidePair sideToInt(string s);
-Grid rotateGrid(Grid grid);
 unordered_map<Coordinate, Grid, pair_hash> generateMap(vector<Grid> &inputs);
 void printGrid(Grid g);
-int leftBottomFrequencies(Grid, unordered_map<SidePair, int, pair_hash>);
-Grid findBottomLeftCorner(const vector<Grid> &input);
-string getRightEdge(Grid g);
-string getTopEdge(Grid g);
-Grid findGridWithEdge(unordered_set<Grid, pair_hash> grids, string edge);
+Grid extractImage(unordered_map<Coordinate, Grid, pair_hash> megaGrid);
 
-int main()
+
+int main(int ac, char** av)
 {
     ifstream inputFile("inputs/20.txt");
 
@@ -43,24 +52,15 @@ int main()
 
     unordered_map<Coordinate, Grid, pair_hash> test = generateMap(grids);
 
-    for (int i = 0; i < 12; i++)
-    {
-        Grid g = test[make_pair(i, 0)];
-        printGrid(g);
-    }
+    printGrid(extractImage(test));
 }
+
 
 void printGrid(Grid g)
 {
-    for (int i = 0; i < g.size(); i++)
-    {
-        for (int j = 0; j < g[0].size(); j++)
-        {
-            cout << g[i][j];
-        }
-        cout << endl;
-    }
-    cout << endl;
+    for (string s : g)
+        cout << s << "\n";    
+    cout << endl;    
 }
 
 
@@ -70,7 +70,7 @@ pair<int, Grid> getGrid(ifstream &inputFile)
     getline(inputFile, s);
     istringstream iss(s);
 
-    iss >> s;
+    iss.ignore(5);
     int tileId;
     iss >> tileId;
 
@@ -87,7 +87,24 @@ pair<int, Grid> getGrid(ifstream &inputFile)
 }
 
 
-vector<SidePair> getOptions(Grid grid)
+SideHash hashSide(string s)
+{
+    int normal = 0, reverse = 0;
+
+    for (int i = 0; i < s.length(); i++)
+    {
+        if (s[i] == '#')
+        {
+            normal += 1 << (s.length() - i - 1);
+            reverse += 1 << i;
+        }
+    }
+
+    return normal < reverse ? normal : reverse;
+}
+
+
+vector<SideHash> edgeHashes(Grid grid)
 {
     string top, bottom, left, right;
 
@@ -103,69 +120,49 @@ vector<SidePair> getOptions(Grid grid)
         right += grid[i].back();
     }
 
-    vector<pair<int, int>> output;
+    vector<SideHash> output;
 
-    output.push_back(sideToInt(top));
-    output.push_back(sideToInt(bottom));
-    output.push_back(sideToInt(left));
-    output.push_back(sideToInt(right));
+    output.push_back(hashSide(top));
+    output.push_back(hashSide(bottom));
+    output.push_back(hashSide(left));
+    output.push_back(hashSide(right));
 
     return output;
 }
 
 
-SidePair sideToInt(string s)
+unordered_map<SideHash, int> globalEdgeCounts(vector<Grid> &input)
 {
-    int normal = 0, reverse = 0;
-
-    for (int i = 0; i < s.length(); i++)
-    {
-        if (s[i] == '#')
-        {
-            normal += 1 << (s.length() - i - 1);
-            reverse += 1 << i;
-        }
-    }
-
-    if (normal < reverse)
-    {
-        return make_pair(normal, reverse);
-    }
-    else
-    {
-        return make_pair(reverse, normal);
-    }    
-}
-
-
-vector<Grid> findCorners(const vector<Grid> &input)
-{
-    unordered_map<SidePair, int, pair_hash> edgeCounts;
+    unordered_map<SideHash, int> edgeCounts;
 
     for (auto grid : input)
-    {
-        for (auto sidePair : getOptions(grid))
+        for (SideHash hash : edgeHashes(grid))
         {
-            if (edgeCounts.count(sidePair) == 0)
+            if (edgeCounts.count(hash) == 0)
             {
-                edgeCounts[sidePair] = 1;                
-            }   
+                edgeCounts[hash] = 1;                
+            }
             else
             {
-                edgeCounts[sidePair]++;
+                edgeCounts[hash]++;
             }
         }
-    }
+
+    return edgeCounts;
+}
+
+vector<Grid> findCorners(vector<Grid> &input)
+{
+    unordered_map<SideHash, int> edgeCounts = globalEdgeCounts(input);
 
     // Find corners: these will be tiles which have two edges with count 1.
-
     vector<Grid> corners;
 
     for (auto grid : input)
     {
         int thisCount = 0;
-        for (auto sidePair : getOptions(grid))
-            thisCount += edgeCounts[sidePair];
+        for (SideHash hash : edgeHashes(grid))
+            thisCount += edgeCounts[hash];
         if (thisCount == 6)
             corners.push_back(grid);
     }    
@@ -174,40 +171,44 @@ vector<Grid> findCorners(const vector<Grid> &input)
 }
 
 
-Grid findBottomLeftCorner(const vector<Grid> &input)
+int leftBottomFrequencies(Grid g, unordered_map<SideHash, int> &edgeCounts)
 {
-    unordered_map<SidePair, int, pair_hash> edgeCounts;
+    string leftString = "";
+    for (int i = 0; i < 10; i++)
+        leftString += g[i][0];
 
-    for (auto grid : input)
-    {
-        for (auto sidePair : getOptions(grid))
+    SideHash left = hashSide(leftString);
+    SideHash bottom = hashSide(g.back());
+
+    return edgeCounts[bottom] + edgeCounts[left];
+}
+
+
+Grid rotateGrid(Grid grid)
+{
+    Grid rotatedGrid = grid;
+
+    for (int i = 0; i < 10; i++)
+        for (int j = 0; j < 10; j++)
         {
-            if (edgeCounts.count(sidePair) == 0)
-            {
-                edgeCounts[sidePair] = 1;                
-            }   
-            else
-            {
-                edgeCounts[sidePair]++;
-            }
+            double translatedX = i - 4.5;
+            double translatedY = j - 4.5;
+            double rotatedX = -translatedY;
+            double rotatedY = translatedX;
+            int rotatedBackX = std::lround(rotatedX + 4.5);
+            int rotatedBackY = std::lround(rotatedY + 4.5);
+            rotatedGrid[i][j] = grid[rotatedBackX][rotatedBackY];
         }
-    }
 
-    // Find corners: these will be tiles which have two edges with count 1.
-
-    vector<Grid> corners;
-
-    for (auto grid : input)
-    {
-        int thisCount = 0;
-        for (auto sidePair : getOptions(grid))
-            thisCount += edgeCounts[sidePair];
-        if (thisCount == 6)
-            corners.push_back(grid);
-    }    
+    return rotatedGrid;
+}
 
 
-    // Take the first grid element and then rotate so that it is in the right orientation.
+Grid bottomLeftCorner(vector<Grid> &input)
+{
+    unordered_map<SideHash, int> edgeCounts = globalEdgeCounts(input);
+
+    vector<Grid> corners = findCorners(input);
 
     Grid initialPick = corners[0];
     while (leftBottomFrequencies(initialPick, edgeCounts) != 2)
@@ -218,55 +219,16 @@ Grid findBottomLeftCorner(const vector<Grid> &input)
     return initialPick;
 }
 
-int leftBottomFrequencies(Grid g, unordered_map<SidePair, int, pair_hash> edgeCounts)
-{
-    SidePair bottom = sideToInt(g[9]);
-
-    string leftString = "";
-    for (int i = 0; i < 9; i++)
-        leftString += g[i][0];
-
-    SidePair left = sideToInt(leftString);
-
-    return edgeCounts[bottom] + edgeCounts[left];
-}
-
-
-// Tested and works!
-Grid rotateGrid(Grid grid)
-{
-    Grid rotatedGrid = grid;
-
-    for (int i = 0; i < 10; i++)
-    {
-        for (int j = 0; j < 10; j++)
-        {
-            double translatedX = i - 4.5;
-            double translatedY = j - 4.5;
-            double rotatedX = -translatedY;
-            double rotatedY = translatedX;
-            int rotatedBackX = std::lround(rotatedX + 4.5);
-            int rotatedBackY = std::lround(rotatedY + 4.5);
-            //cout << "(" << i << ", " << j << ") -> (" << rotatedBackX << ", " << rotatedBackY << ")\n";
-            rotatedGrid[i][j] = grid[rotatedBackX][rotatedBackY];
-        }
-    }
-
-    return rotatedGrid;
-}
-
 
 Grid flipHorizontal(Grid grid)
 {
     Grid flippedGrid = grid;
 
     for (int i = 0; i < 10; i++)
-    {
         for (int j = 0; j < 10; j++)
         {            
             flippedGrid[i][j] = grid[i][9 - j];
         }
-    }
 
     return flippedGrid;
 }
@@ -289,17 +251,51 @@ vector<Grid> allSymmetries(Grid grid)
 }
 
 
-Grid rotateMatchingBottom(Grid initialGrid, string bottomEdge)
+string getTopEdge(Grid g)
 {
-    vector<Grid> symmetries = allSymmetries(initialGrid);
+    return g.front();
+}
+
+
+string getBottomEdge(Grid g)
+{
+    return g.back();
+}
+
+
+string getRightEdge(Grid g)
+{
+    string s = "";
+    for (int i = 0; i < 10; i++)
+        s += g[i].back();
+
+    return s;
+}
+
+
+string getLeftEdge(Grid g)
+{
+    string s = "";
+    for (int i = 0; i < 10; i++)
+        s += g[i].front();
+
+    return s;
+}
+
+
+// Note that for these functions, the grid being tested is above/to the right of
+// the grid which it will connect onto.
+Grid rotateMatchingBottom(Grid grid, string bottomEdge)
+{
+    vector<Grid> symmetries = allSymmetries(grid);
 
     Grid output;
 
     for (Grid g : symmetries)
-        if (g[9] == bottomEdge)
+        if (getBottomEdge(g) == bottomEdge)
             return g;
 
-    cout << "Shouldn't be here. Should have returned a grid.";
+    cout << "rotateMatchingBottom: Shouldn't be here.\n";
     return output;
 }
 
@@ -310,35 +306,51 @@ Grid rotateMatchingLeft(Grid initialGrid, string leftEdge)
 
     Grid output;
 
+    //cout << "Target edge: " << leftEdge << "\n";
+
     for (Grid g : symmetries)
     {
-        bool valid = true;
-        for (int i = 0; i < 10; i++)
-            if (g[i][0] != leftEdge[i])
-                valid = false;
-        if (valid)
+        //printGrid(g);
+      //  cout << "Left edge: " << getLeftEdge(g) << "\n";
+        if (getLeftEdge(g) == leftEdge)
             return g;
     }
 
-    cout << "Shouldn't be here. Should have returned a grid.";
+    cout << "rotateMatchingLeft: Shouldn't be here.\n";
     return output;
 }
 
 
 
+Grid findGridWithEdge(unordered_set<Grid, Grid_hash> &grids, string edge)
+{
+    SideHash targetHash = hashSide(edge);
+
+    for (Grid g : grids)
+    {
+        vector<SideHash> hashes = edgeHashes(g);
+        for (SideHash hash : hashes)
+            if (targetHash == hash)
+                return g;
+    }   
+
+    cout << "findGridWithEdge: Shouldn't be here.\n";
+    
+    return Grid {};
+}
+
+
 unordered_map<Coordinate, Grid, pair_hash> generateMap(vector<Grid> &inputs)
 {
-
-    Grid bottomLeft = findBottomLeftCorner(inputs);
+    Grid bottomLeft = bottomLeftCorner(inputs);
 
     unordered_map<Coordinate, Grid, pair_hash> mapPlacement;
 
     mapPlacement[make_pair(0, 0)] = bottomLeft;
 
-    // place the bottom row - then we'll go up through each column 
-    // from the bottom.
+    // Place the bottom row.
 
-    unordered_set<Grid, pair_hash> availableGrids;
+    unordered_set<Grid, Grid_hash> availableGrids;
     for (Grid g : inputs)
         availableGrids.insert(g);
     availableGrids.erase(bottomLeft);
@@ -346,51 +358,83 @@ unordered_map<Coordinate, Grid, pair_hash> generateMap(vector<Grid> &inputs)
     Grid currentGrid = bottomLeft;
     for (int i = 1; i < 12; i++)
     {
+        Coordinate thisPosition = make_pair(i, 0);
         string rightEdge = getRightEdge(currentGrid);
         Grid nextGrid = findGridWithEdge(availableGrids, rightEdge);        
         Grid rotatedGrid = rotateMatchingLeft(nextGrid, rightEdge);
-        mapPlacement[make_pair(0, i)] = rotatedGrid;
+        mapPlacement[thisPosition] = rotatedGrid;
+
+        
+
         currentGrid = rotatedGrid;
+    }
+
+    for (int i = 0; i < 12; i++)
+    {
+        currentGrid = mapPlacement[make_pair(i, 0)];
+        for (int j = 1; j < 12; j++)
+        {
+            Coordinate thisPosition = make_pair(i, j);
+            string topEdge = getTopEdge(currentGrid);
+            Grid nextGrid = findGridWithEdge(availableGrids, topEdge);
+            Grid rotatedGrid = rotateMatchingBottom(nextGrid, topEdge);
+            mapPlacement[thisPosition] = rotatedGrid;
+            currentGrid = rotatedGrid;
+        }
     }
 
     return mapPlacement;
 }
 
-Grid findGridWithEdge(unordered_set<Grid, pair_hash> grids, string edge)
+
+Grid cutEdges(Grid g)
 {
+    Grid output;
 
-    SidePair targetSidePair = sideToInt(edge);
-
-    for (Grid grid : grids)
+    for (int i = 1; i < g.size() - 1; i++)
     {
-        vector<SidePair> options = getOptions(grid);
-        for (SidePair sp : options)
+        string thisLine = g[i];
+        output.push_back(thisLine.substr(1, thisLine.length() - 2));
+    }
+
+    return output;
+}
+
+
+Grid extractImage(unordered_map<Coordinate, Grid, pair_hash> megaGrid)
+{
+    Grid megaImage;
+
+    for (int i = 0; i < 12; i++)
+        for (int j = 0; j < 12; j++)
         {
-            if (targetSidePair == sp)
-                return grid;
+            megaGrid[make_pair(i, j)] = cutEdges(megaGrid[make_pair(i, j)]);
         }
-    }
 
-    cout << "Shouldn't be here, there should be a matching grid beforehand.";
-
-    Grid temp;
-    return temp;
-}
-
-
-string getRightEdge(Grid g)
-{
-    string s = "";
-    for (int i = 0; i < 9; i++)
+    for (int row = 12 * 8 - 1; row >= 0; row--)
     {
-        s += g[i][9];
+        string thisRow;
+
+        int j = row / 8;
+
+        for (int i = 0; i < 12; i++)
+            thisRow += megaGrid[make_pair(i, j)][7 - (row % 8)];
+
+        megaImage.push_back(thisRow);
     }
 
-    return s;
+    return megaImage;
 }
 
 
-string getTopEdge(Grid g)
+unordered_set<Coordinate, pair_hash> HashfindMonsters(Grid g, Transform inverseTransform)
 {
-    return g[0];
+
+
+// Work out all the positions of the monsters in the usual coordinates.
+// Then use the inverseTransform to map those back to the original coordinates
+
+                      # 
+#    ##    ##    ###
+ #  #  #  #  #  #   
 }
